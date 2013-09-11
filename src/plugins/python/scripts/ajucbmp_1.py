@@ -15,16 +15,26 @@ def parseName(fn):
   parts = fn.split(".")
   return ".".join(parts[:-1]), parts[-1]
 
-def rgbaFromInt(i):
-  # save 5 bits of i to each channel
-  # i can have maximum of 20 bits
+def rgbaFromInt(i, bitsPerChannel=8):
+  # save bitsPerChannel bits of i to each channel
+  # i can have maximum of 4*bitsPerChannel bits
   # (so there are a little more than 1 000 000 tile numbers possible)
+  # bitsPerChannel must be between 1 and 8 inclusively
+  if bitsPerChannel < 1 or bitsPerChannel >8:
+    return None
+
+  mask = (2**(bitsPerChannel))-1
+
+  freeBits = 8-bitsPerChannel
   return [
-    ((i & (31<<15))>>15),
-    ((i & (31<<10))>>10),
-    ((i & (31<<5))>>5),
-    ((i & (31)))
+    ((i & (mask<<(bitsPerChannel*3)))>>(bitsPerChannel*3))<<freeBits,
+    ((i & (mask<<(bitsPerChannel*2)))>>(bitsPerChannel*2))<<freeBits,
+    ((i & (mask<<(bitsPerChannel  )))>>(bitsPerChannel  ))<<freeBits,
+    ((i & (mask)))<<freeBits
   ]
+
+def rgbaFromFloat(i, bitsPerChannel=8):
+  return rgbaFromInt(i*256.0, bitsPerChannel) #TODO better conversion
 
 class AjucBmp1(Plugin):
   @classmethod
@@ -96,16 +106,24 @@ class AjucBmp1(Plugin):
   @classmethod
   def writeDescriptor(cls, m, filesDir, fn):
     print ("writeDescriptor fn="+fn)
+
+    outfile = open(filename,'w')
+    try:
+      outfile.write(str(filesDir)+"\n")
+    catch:
+      return False
+    finally:
+      outfile.close()
     return True
 
   @classmethod
   def writeTiles(cls, m, fn):
-    print ("writeTiles fn="+fn)
+    print ("writeTiles fn="+fn+" not implemented yet")
     return True
 
   @classmethod
   def writeSprites(cls, m, fn):
-    print ("writeSprites fn="+fn)
+    print ("writeSprites fn="+fn+" not implemented yet")
     return True
 
   @classmethod
@@ -148,8 +166,8 @@ class AjucBmp1(Plugin):
 
 
   @classmethod
-  def writeObject(cls, obj, f):
-    print ("writeObject")
+  def serializedObject(cls, obj):
+    print ("serializedObject")
     x = [
       'cell',
       'height',
@@ -174,6 +192,31 @@ class AjucBmp1(Plugin):
     print ("obj.name="+str(obj.name()))
     print ("obj.rotation="+str(obj.rotation()))
     print ("obj.isVisible="+str(obj.isVisible()))
+
+    bitsPerChannel = 8
+
+    outPixelsArray += [
+      rgbaFromInt(obj.property("id"), bitsPerChannel),                #0
+      rgbaFromInt(obj.property("parentId"), bitsPerChannel),          #1
+      rgbaFromInt(obj.property("groupId"), bitsPerChannel),           #2
+
+      rgbaFromInt(obj.property("spriteNo"), bitsPerChannel),          #3
+
+      rgbaFromFloat(obj.property("mass"), bitsPerChannel),            #4
+      rgbaFromFloat(obj.property("momentOfInertia"), bitsPerChannel), #5
+      rgbaFromFloat(obj.property("friction"), bitsPerChannel),        #6
+
+      rgbaFromFloat(obj.property("vx"), bitsPerChannel),              #7
+      rgbaFromFloat(obj.property("vy"), bitsPerChannel),              #8
+      rgbaFromFloat(obj.property("angularVelocity"), bitsPerChannel), #9
+
+      rgbaFromFloat(obj.x(), bitsPerChannel),                         #10
+      rgbaFromFloat(obj.y(), bitsPerChannel),                         #11
+      rgbaFromFloat(obj.rotation(), bitsPerChannel),                  #12
+      rgbaFromFloat(obj.width(), bitsPerChannel),                     #13
+      rgbaFromFloat(obj.height(), bitsPerChannel)                     #14
+    ]
+
     return True
 
   @classmethod
@@ -181,8 +224,7 @@ class AjucBmp1(Plugin):
     print ("writeObjects i="+str(i)+" fn="+fn)
     og = objectGroupAt(m, i)
     for x in range(og.objectCount()):
-      #print ("dir(og.objectAt("+str(x)+"))="+str(dir(og.objectAt(x))))
-      cls.writeObject(og.objectAt(x), None)
+      cls.writeObject(og.objectAt(x), outPixelsArray)
     return True
 
 
